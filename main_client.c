@@ -9,113 +9,121 @@
 #include <netdb.h>
 #include <pthread.h>
 
-#define PORT_NUM 5000
+#define PORT_NUM 1004
 
 void error(const char *msg)
 {
-perror(msg);
-exit(0);
+    perror(msg);
+    exit(0);
 }
 
-typedef struct _ThreadArgs {
-int clisockfd;
+typedef struct _ThreadArgs
+{
+    int clisockfd;
 } ThreadArgs;
 
-void* thread_main_recv(void* args)
+void *thread_main_recv(void *args)
 {
-pthread_detach(pthread_self());
+    pthread_detach(pthread_self());
 
-int sockfd = ((ThreadArgs*) args)->clisockfd;
-free(args);
+    int sockfd = ((ThreadArgs *)args)->clisockfd;
+    free(args);
 
-// keep receiving and displaying message from server
-char buffer[512];
-int n;
+    // keep receiving and displaying message from server
+    char buffer[512];
+    int n;
 
-n = recv(sockfd, buffer, 512, 0);
-while (n > 0) {
-memset(buffer, 0, 512);
-n = recv(sockfd, buffer, 512, 0);
-if (n < 0) error("ERROR recv() failed");
+    n = recv(sockfd, buffer, 512, 0);
+    while (n > 0)
+    {
+        memset(buffer, 0, 512);
+        n = recv(sockfd, buffer, 512, 0);
+        if (n < 0)
+            error("ERROR recv() failed");
 
-printf("\n%s\n", buffer);
+        printf("\n%s\n", buffer);
+    }
+
+    return NULL;
 }
 
-return NULL;
-}
-
-void* thread_main_send(void* args)
+void *thread_main_send(void *args)
 {
-pthread_detach(pthread_self());
+    pthread_detach(pthread_self());
 
-int sockfd = ((ThreadArgs*) args)->clisockfd;
-free(args);
+    int sockfd = ((ThreadArgs *)args)->clisockfd;
+    free(args);
 
-char buffer[256];
-int n;
+    char buffer[256];
+    int n;
 
-while (1) {
-memset(buffer, 0, 256);
-fgets(buffer, 255, stdin);
+    while (1)
+    {
+        memset(buffer, 0, 256);
+        fgets(buffer, 255, stdin);
 
-if (strlen(buffer) == 1) buffer[0] = '\0';
+        if (strlen(buffer) == 1)
+            buffer[0] = '\0';
 
-n = send(sockfd, buffer, strlen(buffer), 0);
-if (n < 0) error("ERROR writing to socket");
+        n = send(sockfd, buffer, strlen(buffer), 0);
+        if (n < 0)
+            error("ERROR writing to socket");
 
-if (n == 0) break; // we stop transmission when user type empty string
-}
+        if (n == 0)
+            break; // we stop transmission when user type empty string
+    }
 
-return NULL;
+    return NULL;
 }
 
 int main(int argc, char *argv[])
 {
-if (argc < 2) error("Please specify hostname");
+    if (argc < 2)
+        error("Please specify hostname");
 
-int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-if (sockfd < 0) error("ERROR opening socket");
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0)
+        error("ERROR opening socket");
 
-struct sockaddr_in serv_addr;
-socklen_t slen = sizeof(serv_addr);
-memset((char*) &serv_addr, 0, sizeof(serv_addr));
-serv_addr.sin_family = AF_INET;
-serv_addr.sin_addr.s_addr = inet_addr(argv[1]);
-serv_addr.sin_port = htons(PORT_NUM);
+    struct sockaddr_in serv_addr;
+    socklen_t slen = sizeof(serv_addr);
+    memset((char *)&serv_addr, 0, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = inet_addr(argv[1]);
+    serv_addr.sin_port = htons(PORT_NUM);
 
-printf("Try connecting to %s...\n", inet_ntoa(serv_addr.sin_addr));
+    printf("Try connecting to %s...\n", inet_ntoa(serv_addr.sin_addr));
 
-int status = connect(sockfd,
-(struct sockaddr *) &serv_addr, slen);
-if (status < 0) error("ERROR connecting");
+    int status = connect(sockfd,
+                         (struct sockaddr *)&serv_addr, slen);
+    if (status < 0)
+        error("ERROR connecting");
 
-// ask for username
-char uname[50];
-printf("Type your user name: ");
-fgets(uname, sizeof(uname), stdin);
-uname[strcspn(uname, "\n")] = '\0';
-send(sockfd, uname, strlen(uname), 0);
+    // ask for username
+    char uname[50];
+    printf("Type your user name: ");
+    fgets(uname, sizeof(uname), stdin);
+    uname[strcspn(uname, "\n")] = '\0';
+    send(sockfd, uname, strlen(uname), 0);
 
-printf("%s joined the chat room!\n", uname);
+    printf("%s joined the chat room!\n", uname);
 
-pthread_t tid1;
-pthread_t tid2;
+    pthread_t tid1;
+    pthread_t tid2;
 
-ThreadArgs* args;
+    ThreadArgs *args;
 
-args = (ThreadArgs*) malloc(sizeof(ThreadArgs));
-args->clisockfd = sockfd;
-pthread_create(&tid1, NULL, thread_main_send, (void*) args);
+    args = (ThreadArgs *)malloc(sizeof(ThreadArgs));
+    args->clisockfd = sockfd;
+    pthread_create(&tid1, NULL, thread_main_send, (void *)args);
 
-args = (ThreadArgs*) malloc(sizeof(ThreadArgs));
-args->clisockfd = sockfd;
-pthread_create(&tid2, NULL, thread_main_recv, (void*) args);
+    args = (ThreadArgs *)malloc(sizeof(ThreadArgs));
+    args->clisockfd = sockfd;
+    pthread_create(&tid2, NULL, thread_main_recv, (void *)args);
 
-pthread_join(tid1, NULL);
+    pthread_join(tid1, NULL);
 
-close(sockfd);
+    close(sockfd);
 
-return 0;
+    return 0;
 }
-
-
