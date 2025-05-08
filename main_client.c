@@ -11,6 +11,74 @@
 
 #define PORT_NUM 1004
 
+#define RESET "\x1B[0m"
+#define RED "\x1B[31m"
+#define GREEN "\x1B[32m"
+#define YELLOW "\x1B[33m"
+#define BLUE "\x1B[34m"
+#define MAGENTA "\x1B[35m"
+#define CYAN "\x1B[36m"
+#define BRIGHT_RED "\x1B[91m"
+#define BRIGHT_GREEN "\x1B[92m"
+#define BRIGHT_YELLOW "\x1B[93m"
+#define BRIGHT_BLUE "\x1B[94m"
+#define BRIGHT_MAGENTA "\x1B[95m"
+#define BRIGHT_CYAN "\x1B[96m"
+
+char *color_palette[] = {
+    RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN,
+    BRIGHT_RED, BRIGHT_GREEN, BRIGHT_YELLOW, BRIGHT_BLUE, BRIGHT_MAGENTA, BRIGHT_CYAN};
+int palette_size = sizeof(color_palette) / sizeof(color_palette[0]);
+
+typedef struct
+{
+    char name[50];
+    char *color_code;
+} UserColor;
+
+UserColor user_colors[100];
+int color_count = 0;
+
+char *get_color_for_user(const char *name)
+{
+    for (int i = 0; i < color_count; i++)
+    {
+        if (strcmp(user_colors[i].name, name) == 0)
+        {
+            return user_colors[i].color_code;
+        }
+    }
+    if (color_count < 100)
+    {
+        strcpy(user_colors[color_count].name, name);
+        user_colors[color_count].color_code = color_palette[color_count % palette_size];
+        return user_colors[color_count++].color_code;
+    }
+    return RESET;
+}
+
+void print_colored_message(const char *message)
+{
+    const char *start = strchr(message, '[');
+    const char *end = strchr(message, ']');
+
+    if (start && end && end > start)
+    {
+        char username[50];
+        int len = end - start - 1;
+        strncpy(username, start + 1, len);
+        username[len] = '\0';
+
+        char *color = get_color_for_user(username);
+
+        printf("%s%s%s\n> ", color, message, RESET);
+    }
+    else
+    {
+        printf("%s\n> ", message);
+    }
+}
+
 void error(const char *msg)
 {
     perror(msg);
@@ -41,7 +109,7 @@ void *thread_main_recv(void *args)
         if (n < 0)
             error("ERROR recv() failed");
 
-        printf("\n%s\n", buffer);
+        print_colored_message(buffer);
     }
 
     return NULL;
