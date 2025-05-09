@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
     }
 
     int room_number = -1;
-    int already_sent_room_number = 0;
+    int usedRoomNum = 0;
 
     struct sockaddr_in serv_addr;
     socklen_t slen = sizeof(serv_addr);
@@ -175,8 +175,8 @@ int main(int argc, char *argv[])
 
     if (argc == 2) {
         // We did not specify room; ask server for room list
-        int special_code = -2; // tell server we want room list
-        send(sockfd, &special_code, sizeof(int), 0);
+        int input = -2; // tell server we want room list
+        send(sockfd, &input, sizeof(int), 0);
 
         char list[1024];
         int n = recv(sockfd, list, sizeof(list) - 1, 0);
@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
             error("ERROR reconnecting");
 
         send(sockfd, &room_number, sizeof(int), 0);
-        already_sent_room_number = 1;
+        usedRoomNum = 1;
     } else if (argc == 3) {
         if (strcmp(argv[2], "new") != 0) {
             room_number = atoi(argv[2]);
@@ -216,7 +216,7 @@ int main(int argc, char *argv[])
         // else room_number stays -1 (new)
     }
 
-    if (!already_sent_room_number) {
+    if (!usedRoomNum) {
         send(sockfd, &room_number, sizeof(int), 0);
     }
 
