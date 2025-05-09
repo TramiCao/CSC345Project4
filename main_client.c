@@ -146,8 +146,16 @@ void *thread_main_send(void *args)
 
 int main(int argc, char *argv[])
 {
-    if (argc < 2)
+    if (argc < 2){
         error("Please specify hostname");
+    }
+
+    int room_number = -1; // default to new room
+    if (argc == 3){
+        if (strcmp(argv[2], "new") != 0){
+            room_number = atoi(argv[2]); // try joining room
+        }
+    }
 
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0)
@@ -162,35 +170,51 @@ int main(int argc, char *argv[])
 
     printf("Try connecting to %s...\n", inet_ntoa(serv_addr.sin_addr));
 
-    int status = connect(sockfd,
-                         (struct sockaddr *)&serv_addr, slen);
+    int status = connect(sockfd, (struct sockaddr *)&serv_addr, slen);
     if (status < 0)
         error("ERROR connecting");
 
-    // ask for username
+    // Send room number first (as server expects)
+    send(sockfd, &room_number, sizeof(int), 0);
+
+    // Prompt username
     char uname[50];
     printf("Type your user name: ");
     fgets(uname, sizeof(uname), stdin);
     uname[strcspn(uname, "\n")] = '\0';
     send(sockfd, uname, strlen(uname), 0);
 
+    // Now receive server's welcome or error
+    char welcome[256] = {0};
+    int n = recv(sockfd, welcome, sizeof(welcome) - 1, 0);
+    if (n > 0) {
+        welcome[n] = '\0';
+        if (strstr(welcome, "Error:") != NULL) {
+            printf("%s\n", welcome);
+            close(sockfd);
+            exit(1);
+        }
+        printf("%s", welcome);  // print welcome message
+    }
+    //send(sockfd, &room_number, sizeof(int), 0);
+
     printf("%s joined the chat room!\n", uname);
 
-    pthread_t tid1;
-    pthread_t tid2;
-
+    // Threads to send and receive
+    pthread_t tid1, tid2;
     ThreadArgs *args;
 
-    args = (ThreadArgs *)malloc(sizeof(ThreadArgs));
+    args = malloc(sizeof(ThreadArgs));
     args->clisockfd = sockfd;
-    pthread_create(&tid1, NULL, thread_main_send, (void *)args);
+    pthread_create(&tid1, NULL, thread_main_send, args);
 
-    args = (ThreadArgs *)malloc(sizeof(ThreadArgs));
+    args = malloc(sizeof(ThreadArgs));
     args->clisockfd = sockfd;
-    pthread_create(&tid2, NULL, thread_main_recv, (void *)args);
+    pthread_create(&tid2, NULL, thread_main_recv, args);
 
     pthread_join(tid1, NULL);
-
+    pthread_cancel(tid2);
+    pthread_join(tid2, NULL);
     close(sockfd);
 
     return 0;
