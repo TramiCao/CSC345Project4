@@ -59,15 +59,15 @@ void send_room_list(int clisockfd)
     pthread_mutex_unlock(&lock);
 
     char msg[1024] = "Server says following options are available:\n";
-    int found = 0;
     for (int i = 0; i <= max_room - 100; i++)
     {
         if (rooms[i] > 0)
         {
+            //int found = 0;
             char line[64];
             sprintf(line, "Room %d: %d people\n", i + 1, rooms[i]);
             strcat(msg, line);
-            found = 1;
+            //found = 1;
         }
     }
 }
