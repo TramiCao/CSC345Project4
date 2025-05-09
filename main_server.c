@@ -189,8 +189,8 @@ void *thread_main(void *args)
     broadcast(-1, join_msg);
     printf("%s", join_msg);
 
-    char flush_buf[256];
-    recv(clisockfd, flush_buf, sizeof(flush_buf), MSG_DONTWAIT);
+    //char flush_buf[256];
+    //recv(clisockfd, flush_buf, sizeof(flush_buf), MSG_DONTWAIT);
 
     char buffer[256];
     int nrcv = recv(clisockfd, buffer, 255, 0);

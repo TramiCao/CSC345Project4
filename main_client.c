@@ -71,11 +71,14 @@ void print_colored_message(const char *message)
 
         char *color = get_color_for_user(username);
 
-        printf("%s%s%s\n> ", color, message, RESET);
+        char clearLine[512];
+        strncpy(clearLine, message, sizeof(clearLine));
+        clearLine[strcspn(clearLine, "\n")] = '\0';
+        printf("%s%s%s\n", color, clearLine, RESET);
     }
     else
     {
-        printf("%s\n> ", message);
+        printf("%s\n", message);
     }
 }
 
@@ -101,14 +104,14 @@ void *thread_main_recv(void *args)
     char buffer[512];
     int n;
 
-    n = recv(sockfd, buffer, 512, 0);
-    while (n > 0)
+    while (1)
     {
         memset(buffer, 0, 512);
         n = recv(sockfd, buffer, 512, 0);
         if (n < 0)
             error("ERROR recv() failed");
-
+        if (n == 0)
+            break; // connection closed
         print_colored_message(buffer);
     }
 
@@ -146,13 +149,16 @@ void *thread_main_send(void *args)
 
 int main(int argc, char *argv[])
 {
-    if (argc < 2){
+    if (argc < 2)
+    {
         error("Please specify hostname");
     }
 
     int room_number = -1; // default to new room
-    if (argc == 3){
-        if (strcmp(argv[2], "new") != 0){
+    if (argc == 3)
+    {
+        if (strcmp(argv[2], "new") != 0)
+        {
             room_number = atoi(argv[2]); // try joining room
         }
     }
@@ -187,22 +193,27 @@ int main(int argc, char *argv[])
     // Now receive server's welcome or error
     char welcome[256] = {0};
     int n = recv(sockfd, welcome, sizeof(welcome) - 1, 0);
-    if (n > 0) {
+    if (n > 0)
+    {
         welcome[n] = '\0';
-        if (strstr(welcome, "Error:") != NULL) {
+        if (strstr(welcome, "Error:") != NULL)
+        {
             printf("%s\n", welcome);
             close(sockfd);
             exit(1);
         }
-        printf("%s", welcome);  // print welcome message
+        printf("%s", welcome); // print welcome message
+        // fflush(stdout);
     }
-    //send(sockfd, &room_number, sizeof(int), 0);
+    // send(sockfd, &room_number, sizeof(int), 0);
 
     printf("%s joined the chat room!\n", uname);
 
     // Threads to send and receive
     pthread_t tid1, tid2;
     ThreadArgs *args;
+
+    usleep(100000);
 
     args = malloc(sizeof(ThreadArgs));
     args->clisockfd = sockfd;
