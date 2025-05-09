@@ -25,6 +25,8 @@
 #define BRIGHT_MAGENTA "\x1B[95m"
 #define BRIGHT_CYAN "\x1B[96m"
 
+
+
 char *color_palette[] = {
     RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN,
     BRIGHT_RED, BRIGHT_GREEN, BRIGHT_YELLOW, BRIGHT_BLUE, BRIGHT_MAGENTA, BRIGHT_CYAN};
@@ -149,23 +151,12 @@ void *thread_main_send(void *args)
 
 int main(int argc, char *argv[])
 {
-    if (argc < 2)
-    {
+    if (argc < 2) {
         error("Please specify hostname");
     }
 
-    int room_number = -1; // default to new room
-    if (argc == 3)
-    {
-        if (strcmp(argv[2], "new") != 0)
-        {
-            room_number = atoi(argv[2]); // try joining room
-        }
-    }
-
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0)
-        error("ERROR opening socket");
+    int room_number = -1;
+    int already_sent_room_number = 0;
 
     struct sockaddr_in serv_addr;
     socklen_t slen = sizeof(serv_addr);
@@ -174,38 +165,80 @@ int main(int argc, char *argv[])
     serv_addr.sin_addr.s_addr = inet_addr(argv[1]);
     serv_addr.sin_port = htons(PORT_NUM);
 
-    printf("Try connecting to %s...\n", inet_ntoa(serv_addr.sin_addr));
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0)
+        error("ERROR opening socket");
 
-    int status = connect(sockfd, (struct sockaddr *)&serv_addr, slen);
-    if (status < 0)
+    printf("Try connecting to %s...\n", inet_ntoa(serv_addr.sin_addr));
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, slen) < 0)
         error("ERROR connecting");
 
-    // Send room number first (as server expects)
-    send(sockfd, &room_number, sizeof(int), 0);
+    if (argc == 2) {
+        // We did not specify room; ask server for room list
+        int special_code = -2; // tell server we want room list
+        send(sockfd, &special_code, sizeof(int), 0);
 
-    // Prompt username
+        char list[1024];
+        int n = recv(sockfd, list, sizeof(list) - 1, 0);
+        if (n <= 0)
+            error("ERROR receiving room list");
+        list[n] = '\0';
+
+        printf("%s\n", list);
+        printf("Choose the room number or type [new] to create a new room: ");
+
+        char choice[20];
+        fgets(choice, sizeof(choice), stdin);
+        choice[strcspn(choice, "\n")] = 0;
+
+        close(sockfd);
+
+        if (strcmp(choice, "new") == 0) {
+            room_number = -1;
+        } else {
+            room_number = atoi(choice);
+        }
+
+        // reconnect
+        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd < 0)
+            error("ERROR reopening socket");
+
+        if (connect(sockfd, (struct sockaddr *)&serv_addr, slen) < 0)
+            error("ERROR reconnecting");
+
+        send(sockfd, &room_number, sizeof(int), 0);
+        already_sent_room_number = 1;
+    } else if (argc == 3) {
+        if (strcmp(argv[2], "new") != 0) {
+            room_number = atoi(argv[2]);
+        }
+        // else room_number stays -1 (new)
+    }
+
+    if (!already_sent_room_number) {
+        send(sockfd, &room_number, sizeof(int), 0);
+    }
+
+    // Username
     char uname[50];
     printf("Type your user name: ");
     fgets(uname, sizeof(uname), stdin);
     uname[strcspn(uname, "\n")] = '\0';
     send(sockfd, uname, strlen(uname), 0);
 
-    // Now receive server's welcome or error
+    // Welcome or error
     char welcome[256] = {0};
     int n = recv(sockfd, welcome, sizeof(welcome) - 1, 0);
-    if (n > 0)
-    {
+    if (n > 0) {
         welcome[n] = '\0';
-        if (strstr(welcome, "Error:") != NULL)
-        {
+        if (strstr(welcome, "Error:") != NULL) {
             printf("%s\n", welcome);
             close(sockfd);
             exit(1);
         }
-        printf("%s", welcome); // print welcome message
-        // fflush(stdout);
+        printf("%s", welcome);
     }
-    // send(sockfd, &room_number, sizeof(int), 0);
 
     printf("%s joined the chat room!\n", uname);
 
@@ -230,3 +263,5 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
+	

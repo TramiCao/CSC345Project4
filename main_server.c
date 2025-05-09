@@ -29,6 +29,49 @@ USR *head = NULL;
 USR *tail = NULL;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
+#define MAX_ROOMS 100
+int room_user_counts[MAX_ROOMS] = {0};
+int active_rooms[MAX_ROOMS] = {0};
+
+void send_room_list(int clisockfd)
+{
+    pthread_mutex_lock(&lock);
+    USR *cur = head;
+    int rooms[100] = {0}; // track people in each room
+    int max_room = 0;
+
+    while (cur != NULL)
+    {
+        int r = cur->room_number;
+        if (r < 1)
+        {
+            cur = cur->next;
+            continue;
+        } // skip invalid rooms
+        if (r >= 1 && r < MAX_ROOMS)
+        {
+            rooms[r - 1]++;
+            if (r > max_room)
+                max_room = r;
+        }
+        cur = cur->next;
+    }
+    pthread_mutex_unlock(&lock);
+
+    char msg[1024] = "Server says following options are available:\n";
+    int found = 0;
+    for (int i = 0; i <= max_room - 100; i++)
+    {
+        if (rooms[i] > 0)
+        {
+            char line[64];
+            sprintf(line, "Room %d: %d people\n", i + 1, rooms[i]);
+            strcat(msg, line);
+            found = 1;
+        }
+    }
+}
+
 void add_tail(int newclisockfd, struct sockaddr_in addr, const char *uname, int room_number)
 {
     USR *new_node = (USR *)malloc(sizeof(USR));
@@ -48,6 +91,10 @@ void add_tail(int newclisockfd, struct sockaddr_in addr, const char *uname, int 
         tail->next = new_node;
         tail = new_node;
     }
+    if (room_number >= 1 && room_number <= MAX_ROOMS)
+    {
+        room_user_counts[room_number - 1]++;
+    }
     pthread_mutex_unlock(&lock);
 }
 
@@ -59,6 +106,11 @@ void remove_client(int sockfd)
     {
         if (cur->clisockfd == sockfd)
         {
+            if (cur->room_number >= 1 && cur->room_number <= MAX_ROOMS)
+            {
+                room_user_counts[cur->room_number - 1]--;
+            }
+
             if (prev == NULL)
                 head = cur->next;
             else
@@ -120,39 +172,55 @@ void *thread_main(void *args)
     ThreadArgs *targs = (ThreadArgs *)args;
     int clisockfd = targs->clisockfd;
     struct sockaddr_in cliaddr = targs->cliaddr;
-    //free(targs);
+    // free(targs);
 
     int room_number;
     recv(clisockfd, &room_number, sizeof(int), 0);
 
-    if (room_number < 0)
+    if (room_number == -2)
     {
-        static int next_room = 100; // start room IDs from 100
+        char list_msg[1024] = "Available chat rooms:\n";
+        int any = 0;
         pthread_mutex_lock(&lock);
-        room_number = next_room++;
-        pthread_mutex_unlock(&lock);
-
-        //char msg[128];
-        //sprintf(msg, "Connected to %s with new room number %d\n", inet_ntoa(cliaddr.sin_addr), room_number);
-        //send(clisockfd, msg, strlen(msg), 0);
-    }
-    else
-    {
-        // check if room exists
-        int found = 0;
-        pthread_mutex_lock(&lock);
-        USR *cur = head;
-        while (cur != NULL)
+        for (int i = 0; i < MAX_ROOMS; ++i)
         {
-            if (cur->room_number == room_number)
+            if (room_user_counts[i] > 0)
             {
-                found = 1;
-                break;
+                char line[100];
+                snprintf(line, sizeof(line), "Room %d: %d people\n", i + 1, room_user_counts[i]);
+                strcat(list_msg, line);
+                any = 1;
             }
-            cur = cur->next;
         }
         pthread_mutex_unlock(&lock);
-        if (!found)
+        if (!any)
+        {
+            strcpy(list_msg, "No rooms available. Type 'new' to create one.\n");
+        }
+        send(clisockfd, list_msg, strlen(list_msg), 0);
+        close(clisockfd);
+        return NULL;
+    }
+
+    char uname[50];
+    int n = recv(clisockfd, uname, sizeof(uname), 0);
+
+    if (room_number < 0)
+    {
+        static int next_room = 1; // start room IDs from 1
+        pthread_mutex_lock(&lock);
+        room_number = next_room++;
+        active_rooms[room_number - 1] = 1;
+        pthread_mutex_unlock(&lock);
+
+        // char msg[128];
+        // sprintf(msg, "Connected to %s with new room number %d\n", inet_ntoa(cliaddr.sin_addr), room_number);
+        // send(clisockfd, msg, strlen(msg), 0);
+    }
+
+    else
+    {
+        if (room_number <= 0 || room_number > MAX_ROOMS)
         {
             char err[] = "Error: Room does not exist\n";
             send(clisockfd, err, strlen(err), 0);
@@ -161,13 +229,6 @@ void *thread_main(void *args)
         }
     }
 
-    //struct sockaddr_in cliaddr = ((ThreadArgs *)args)->cliaddr;
-    //free(targs);
-
-    char uname[50];
-    int n = recv(clisockfd, uname, sizeof(uname), 0);
-    //send(clisockfd, msg, strlen(msg), 0);
-
     if (n <= 0)
     {
         close(clisockfd);
@@ -175,7 +236,8 @@ void *thread_main(void *args)
     }
     uname[n] = '\0';
 
-    if(room_number >= 100){
+    if (room_number >= 1)
+    {
         char msg[128];
         sprintf(msg, "Connected to %s with new room number %d\n", inet_ntoa(cliaddr.sin_addr), room_number);
         send(clisockfd, msg, strlen(msg), 0);
@@ -189,8 +251,8 @@ void *thread_main(void *args)
     broadcast(-1, join_msg);
     printf("%s", join_msg);
 
-    //char flush_buf[256];
-    //recv(clisockfd, flush_buf, sizeof(flush_buf), MSG_DONTWAIT);
+    // char flush_buf[256];
+    // recv(clisockfd, flush_buf, sizeof(flush_buf), MSG_DONTWAIT);
 
     char buffer[256];
     int nrcv = recv(clisockfd, buffer, 255, 0);
