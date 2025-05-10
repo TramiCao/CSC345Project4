@@ -218,7 +218,7 @@ void *send_file_thread(void *arg) {
         printf("\rSending %s: %.2f%% (%zu/%zu bytes)", transfer->filename, (float)total_sent / transfer->filesize * 100, total_sent, transfer->filesize);
         fflush(stdout);
         
-        // Delay to prevent CPU flooding
+        // Delay to prevent CPU flooding, inspired by AI
         usleep(1000);
     }
     
@@ -265,7 +265,7 @@ void *receive_file_thread(void *arg) {
             break;
         }
         
-        // Sleep a bit to avoid CPU flooding
+        // Sleep a bit to avoid CPU flooding, inspired by AI
         usleep(100000);
     }
     
