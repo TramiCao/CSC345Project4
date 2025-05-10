@@ -40,6 +40,7 @@
 #define BRIGHT_MAGENTA "\x1B[95m"
 #define BRIGHT_CYAN "\x1B[96m"
 
+// AI Assisted. See report.pdf for details.
 typedef struct {
     int transfer_id;
     char sender_name[50];
